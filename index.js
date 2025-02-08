@@ -9,10 +9,10 @@ const app = express();
 
 app.use(bodyParser.json());
 
+const emailToSocketMapping = new Map();
+const socketToEmailMapping = new Map();
 io.on("connection", (socket)=>{
 
-    const emailToSocketMapping = new Map();
-    const socketToEmailMapping = new Map();
 
     socket.on('join-room', data => {
         const { roomId, emailId } = data; 
@@ -30,6 +30,22 @@ io.on("connection", (socket)=>{
         const socketId = emailToSocketMapping.get(emailId);
         socket.to(socketId).emit('incoming-call', { from: fromEmail, offer })
     });
+
+    socket.on("call-accept", (data) => {
+        console.log("call-accept event triggered on server", data);
+        const { emailId, ans } = data;
+        const socketId = emailToSocketMapping.get(emailId);
+        console.log("Socket ID found:", socketId);  // ✅ Debugging line
+    
+        if (socketId) {
+            socket.to(socketId).emit("call-accept", { ans });
+            console.log("Sent call-accept event to client"); // ✅ Debugging line
+        } else {
+            console.log("No socket found for email:", emailId); // ✅ Debugging line
+        }
+    });
+    
+    
 });
 
 app.listen(8000, ()=> {
