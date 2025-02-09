@@ -1,65 +1,80 @@
-const express = require('express');
-const { Server } = require('socket.io');
-const bodyParser = require('body-parser');
+const express = require("express");
+const { createServer } = require("http");
+const { Server } = require("socket.io");
+const cors = require("cors");
+const bodyParser = require("body-parser");
 
-const io = new Server({
-  cors: true,
-});
 const app = express();
+const server = createServer(app);
+
+app.use(cors({
+  origin: "https://velvety-flan-e5fe23.netlify.app", // Netlify frontend को allow करो
+  methods: ["GET", "POST"],
+  credentials: true
+}));
 
 app.use(bodyParser.json());
+
+const io = new Server(server, {
+  cors: {
+    origin: "https://velvety-flan-e5fe23.netlify.app", // Netlify frontend को allow करो
+    methods: ["GET", "POST"]
+  }
+});
 
 const emailToSocketMapping = new Map();
 const socketToEmailMapping = new Map();
 
 io.on("connection", (socket) => {
+  console.log("New User Connected:", socket.id);
 
-  socket.on('join-room', data => {
+  socket.on("join-room", (data) => {
     const { roomId, emailId } = data;
-    console.log("User", emailId, "Joined-Room", roomId);
+    console.log("User", emailId, "Joined Room", roomId);
     emailToSocketMapping.set(emailId, socket.id);
     socketToEmailMapping.set(socket.id, emailId);
     socket.join(roomId);
-    socket.emit('joined-room', { roomId });
-    socket.broadcast.to(roomId).emit('user-joined', { emailId });
+    socket.emit("joined-room", { roomId });
+    socket.broadcast.to(roomId).emit("user-joined", { emailId });
   });
 
-  socket.on('call-user', data => {
+  socket.on("call-user", (data) => {
     const { emailId, offer } = data;
     const fromEmail = socketToEmailMapping.get(socket.id);
     const socketId = emailToSocketMapping.get(emailId);
     if (socketId) {
-      socket.to(socketId).emit('incoming-call', { from: fromEmail, offer });
+      socket.to(socketId).emit("incoming-call", { from: fromEmail, offer });
     }
   });
 
   socket.on("call-accept", (data) => {
-    console.log("call-accept event triggered on server", data);
+    console.log("Call accepted on server", data);
     const { emailId, ans } = data;
     const socketId = emailToSocketMapping.get(emailId);
     if (socketId) {
       socket.to(socketId).emit("call-accept", { ans });
-      console.log("Sent call-accept event to client");
-    } else {
-      console.log("No socket found for email:", emailId);
     }
   });
 
-  socket.on('end-call', (data) => {
+  socket.on("end-call", (data) => {
     const { emailId } = data;
     const fromEmail = socketToEmailMapping.get(socket.id);
     const socketId = emailToSocketMapping.get(emailId);
     if (socketId) {
-      socket.to(socketId).emit('end-call', { endedBy: fromEmail });
-      console.log("Sent end-call event to client with endedBy:", fromEmail);
-    } else {
-      console.log("No socket found for email:", emailId);
+      socket.to(socketId).emit("end-call", { endedBy: fromEmail });
     }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+    const emailId = socketToEmailMapping.get(socket.id);
+    emailToSocketMapping.delete(emailId);
+    socketToEmailMapping.delete(socket.id);
   });
 });
 
-app.listen(8000, () => {
-  console.log("Server is listening on port 8000");
+// Single port for both Express & Socket.io
+const PORT = process.env.PORT || 8000;
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
-
-io.listen(8001);
