@@ -45,7 +45,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Updated end-call event handler to include 'endedBy' information
   socket.on('end-call', (data) => {
     const { emailId } = data;
     const fromEmail = socketToEmailMapping.get(socket.id);
